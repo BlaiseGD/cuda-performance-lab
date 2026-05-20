@@ -327,7 +327,7 @@ int main() {
 	}
 	cudaDeviceSynchronize();
 	for (int i = 0; i < 20; i++) {
-		fused_layernorm_gpu << <sequenceLen, hiddenSize >> > (d_input, d_output_warp, sequenceLen, hiddenSize);
+		fused_layernorm_gpu << <sequenceLen, hiddenSize >> > (d_input, d_output_fused, sequenceLen, hiddenSize);
 	}
 	cudaDeviceSynchronize();
 
@@ -386,6 +386,7 @@ int main() {
 	cudaMemcpy(h_output_naive.data(), d_output_naive, totalElements * sizeof(float), cudaMemcpyDeviceToHost);
 	cudaMemcpy(h_output_block.data(), d_output_block, totalElements * sizeof(float), cudaMemcpyDeviceToHost);
 	cudaMemcpy(h_output_warp.data(), d_output_warp, totalElements * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(h_output_fused.data(), d_output_fused, totalElements * sizeof(float), cudaMemcpyDeviceToHost);
 
 	/*
 	//COMPUTE ERROR & CHECKING OUTPUT
@@ -414,6 +415,7 @@ int main() {
 	cudaFree(d_output_naive);
 	cudaFree(d_output_block);
 	cudaFree(d_output_warp);
+	cudaFree(d_output_fused);
 
 	return 0;
 }
