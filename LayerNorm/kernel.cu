@@ -304,112 +304,41 @@ int main() {
 	cudaMemset(d_output_fused, 0, totalElements * sizeof(float));
 
 	layernorm_cpu(h_input.data(), h_output_cpu.data(), sequenceLen, hiddenSize);
-	//warmup
-	for (int i = 0; i < 10; i++) {
-		naive_layernorm_gpu << <sequenceLen, block >> > (d_input, d_output_naive, sequenceLen, hiddenSize);
-		block_layernorm_gpu << <sequenceLen, hiddenSize, 2 * hiddenSize * sizeof(float) >> > (d_input, d_output_block, sequenceLen, hiddenSize);
-		warp_layernorm_gpu << <sequenceLen, hiddenSize >> > (d_input, d_output_warp, sequenceLen, hiddenSize);
-		fused_layernorm_gpu << <sequenceLen, hiddenSize >> > (d_input, d_output_fused, sequenceLen, hiddenSize);
-
-	}
-	cudaDeviceSynchronize();
-
-	for (int i = 0; i < 20; i++) {
-		naive_layernorm_gpu << <sequenceLen, block >> > (d_input, d_output_naive, sequenceLen, hiddenSize);
-	}
-	cudaDeviceSynchronize();
-	for (int i = 0; i < 20; i++) {
-		block_layernorm_gpu << <sequenceLen, hiddenSize, 2 * hiddenSize * sizeof(float) >> > (d_input, d_output_block, sequenceLen, hiddenSize);
-	}
-	cudaDeviceSynchronize();
-	for (int i = 0; i < 20; i++) {
-		warp_layernorm_gpu << <sequenceLen, hiddenSize>> > (d_input, d_output_warp, sequenceLen, hiddenSize);
-	}
-	cudaDeviceSynchronize();
-	for (int i = 0; i < 20; i++) {
-		fused_layernorm_gpu << <sequenceLen, hiddenSize >> > (d_input, d_output_fused, sequenceLen, hiddenSize);
-	}
-	cudaDeviceSynchronize();
-
-	/*
-	TIMING CODE
-	auto startCPU = chrono::steady_clock::now();
-
-	//calling function and kernels
-	layernorm_cpu(h_input.data(), h_output_cpu.data(), sequenceLen, hiddenSize);
-	auto stopCPU = chrono::steady_clock::now();
-	chrono::duration<double> cpuTime = stopCPU - startCPU;
-
-	cudaEvent_t start, stop;
-	cudaEventCreate(&start);
-	cudaEventCreate(&stop);
 
 	//warmup
-	cudaDeviceSynchronize();
-	for (int i = 0; i < 10; i++) naive_layernorm_gpu << <sequenceLen, block >> > (d_input, d_output_naive, sequenceLen, hiddenSize);
-	cudaDeviceSynchronize();
-	//avg time
-	for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 10; i++) {
+    	naive_layernorm_gpu << <sequenceLen, block >> > (d_input, d_output_naive, sequenceLen, hiddenSize);
+        block_layernorm_gpu << <sequenceLen, hiddenSize, 2 * hiddenSize * sizeof(float) >> > (d_input, d_output_block, sequenceLen, hiddenSize);
+        warp_layernorm_gpu << <sequenceLen, hiddenSize >> > (d_input, d_output_warp, sequenceLen, hiddenSize);
+        fused_layernorm_gpu << <sequenceLen, hiddenSize >> > (d_input, d_output_fused, sequenceLen, hiddenSize);
 
-		cudaEventRecord(start);
-		//1 thread per token
-		naive_layernorm_gpu << <sequenceLen, block >> > (d_input, d_output_naive, sequenceLen, hiddenSize);
-		cudaEventRecord(stop);
-		cudaEventSynchronize(stop);
-		float ms;
-		cudaEventElapsedTime(&ms, start, stop);
-		totalNaive += ms;
-	}
-	cudaDeviceSynchronize();
-	//1 block per token, 1 thread per hidden dimension element
-	//warmup
-	for (int i = 0; i < 10; i++) block_layernorm_gpu << <sequenceLen, hiddenSize, 2 * hiddenSize * sizeof(float) >> > (d_input, d_output_block, sequenceLen, hiddenSize);
-	cudaDeviceSynchronize();
-	//avg time
-	for (int i = 0; i < 100; i++) {
+    }
+    cudaDeviceSynchronize();
 
-		cudaEventRecord(start);
-		//1 thread per token
-		block_layernorm_gpu << <sequenceLen, hiddenSize, 2 * hiddenSize * sizeof(float) >> > (d_input, d_output_block, sequenceLen, hiddenSize);
-		cudaEventRecord(stop);
-		cudaEventSynchronize(stop);
-		float ms;
-		cudaEventElapsedTime(&ms, start, stop);
-		totalBlock += ms;
-	}
-	std::cout << "CPU: " << cpuTime.count() << '\n';
-	std::cout << "Naive avg: " << totalNaive / 100 << " ms\n";
-	std::cout << "Block avg: " << totalBlock / 100 << " ms\n";
-	*/
+	//profiling grab
+    naive_layernorm_gpu << <sequenceLen, block >> > (d_input, d_output_naive, sequenceLen, hiddenSize);
+    block_layernorm_gpu << <sequenceLen, hiddenSize, 2 * hiddenSize * sizeof(float) >> > (d_input, d_output_block, sequenceLen, hiddenSize);
+    warp_layernorm_gpu << <sequenceLen, hiddenSize>> > (d_input, d_output_warp, sequenceLen, hiddenSize);
+    fused_layernorm_gpu << <sequenceLen, hiddenSize >> > (d_input, d_output_fused, sequenceLen, hiddenSize);
+
+    cudaDeviceSynchronize();
+
+	//benchmarking passes
+    for (int i = 0; i < 20; i++) {
+            naive_layernorm_gpu << <sequenceLen, block >> > (d_input, d_output_naive, sequenceLen, hiddenSize);
+            block_layernorm_gpu << <sequenceLen, hiddenSize, 2 * hiddenSize * sizeof(float) >> > (d_input, d_output_block, sequenceLen, hiddenSize);
+            warp_layernorm_gpu << <sequenceLen, hiddenSize>> > (d_input, d_output_warp, sequenceLen, hiddenSize);
+            fused_layernorm_gpu << <sequenceLen, hiddenSize >> > (d_input, d_output_fused, sequenceLen, hiddenSize);
+    }
+    cudaDeviceSynchronize();
+
 
 	//copy back to host
 	cudaMemcpy(h_output_naive.data(), d_output_naive, totalElements * sizeof(float), cudaMemcpyDeviceToHost);
 	cudaMemcpy(h_output_block.data(), d_output_block, totalElements * sizeof(float), cudaMemcpyDeviceToHost);
 	cudaMemcpy(h_output_warp.data(), d_output_warp, totalElements * sizeof(float), cudaMemcpyDeviceToHost);
 	cudaMemcpy(h_output_fused.data(), d_output_fused, totalElements * sizeof(float), cudaMemcpyDeviceToHost);
-
-	/*
-	//COMPUTE ERROR & CHECKING OUTPUT
-	//NOTE: get rid of all the printing for profiling
-	float maxError = 0.0f;
-	for (int i = 0; i < totalElements; i++) {
-		//cout << "CPU element at " << i << ": " << h_output_cpu[i] << '\n';
-	}
-	cout << "\nCPU Runtime: " << cpuTime.count() << " ms\n\n";
-	for (int i = 0; i < totalElements; i++) {
-		//cout << "GPU element at " << i << ": " << h_output_naive[i] << '\n';
-		maxError = fmax(maxError, fabs(h_output_cpu[i] - h_output_naive[i]));
-	}
-	cout << "\nMax Error (Naive): " << maxError << "\n\n";
-	maxError = 0.0f;
-	for (int i = 0; i < totalElements; i++) {
-		//cout << "GPU Block & Shared at " << i << ": " << h_output_block[i] << '\n';
-		maxError = fmax(maxError, fabs(h_output_cpu[i] - h_output_block[i]));
-	}
-	cout << "\nMax Error (Block): " << maxError;
-	*/
 	
-
 	//free the device variables from DRAM
 	cudaFree(d_input);
 	cudaFree(d_output_naive);
